@@ -1,0 +1,260 @@
+import { OTC } from "h-otc"
+//实例化OTC合约对象
+//合约地址(测试):
+//OTC:0x69d080C1b8DfB956e807D6db7626ddF1044643e4
+//Margin:0xc45bb588408Cbc774De042a58aA77E8a5afB8e90
+//切链要更新otc对象
+let otc = new OTC({
+    rpcUrl:"节点", 
+    privateKey:"私钥",
+    contract: "OTC合约地址"
+})
+
+
+1.成为U商以及缴纳保证金
+    a.在后台设置地址为U商地址
+    b.获取当前钱包下代币的保证金 总数以及剩余额度
+        let result = await otc.marginBook({
+            wallet:"钱包地址",
+            token:"代币合约地址"
+        })
+    c.需先授权代币
+        let result = await otc.approve({
+            token:"代币合约地址", 
+            amount:代币数量
+        })
+    d.缴纳保证金
+        let result = await otc.payMargin({
+            token:"代币合约地址", 
+            amount:代币数量
+        })
+    e.提交交易hash给后台解析 
+    f.交易示例:https://testnet.bscscan.com/tx/0xd5cfd489acee61e149c5c9a46b97b273ae76277b155dae3c53c3b1e607b8f889
+    g.解析事件:PayMargin (address payer, address token, uint256 amount, uint256 total, uint256 surplus)
+    h.Topics[0]:0x3fb13993b0a69e002c6fc5d4ef78c40c6386cc77f61a88054059aa90891fe57b
+
+2.前端调用合约发布项目
+    a.获取币种交易手续费后台提供接口
+        买方手续费 0.1%
+        卖方手续费 0.2%
+        如果你输入上架100USDT  代币数量 = 1.002 * 100
+
+        获取当前钱包下代币的保证金数量 检查发布数量不能大于剩余保证金剩余额度
+            let result = await otc.marginBook({
+                wallet:"钱包地址",
+                token:"代币合约地址"
+            })
+    b.预览信息给用户，需要 付出多少(代币/法币) 能得到多少(代币/法币)
+    c.发布卖单广告需要先授权代币
+        let result = await otc.approve({
+            token:"代币合约地址", 
+            amount:代币数量
+        })
+    d.提交发布项目的交易hash给后台解析 后台提供接口
+        let result = await otc.publish({
+            token:"代币合约地址", 
+            amount:代币数量,
+            legal:法币ID,
+            price:法币价格,
+            side:卖单:1 买单:2,
+            desc:"交易条款",
+            payType:"支付方式",
+            min:最小交易量,
+            max:最大交易量
+        })
+    e.后台根据解析出来的数据上架广告 数据包含（广告ID,代币地址,代币数量,法币ID,法币价格,买单还是卖单） 需验证当前地址是否为U商地址 
+    f.交易示例:https://testnet.bscscan.com/tx/0x5310a0bfbaa9863abc1a0dc0143c7fa6776621eaf0284476763645ce64d77365#eventlog
+    g.解析事件:Publish (bytes32 aid, address issuer, address token, uint256 amount, uint256 legal, uint256 price, uint256 min, uint256 max, uint256 side, string payType, string desc)
+    h.Topics[0]:0x36e3e5c92f968c22a806f814421693682b7706f579777be5128f49f0da4807ed
+
+3.用户买卖单操作 
+    a.我要买
+        一.获取广告交易代币剩余量(result.surplus,result.min,result.max) 购买量大于剩余量提示用户  最小交易量 <= 购买量 <= 最大交易量
+            let result = await otc.fundAdvert("合约生成广告ID")
+        二.预览信息给用户，需要 付出多少(代币/法币) 能得到多少(代币/法币)
+        三.提交数据给后台,生成订单 后台提供接口
+    b.我要卖
+        一.获取币种交易手续费
+            买方手续费 0.1%
+            卖方手续费 0.2%
+            如果你输入上架100USDT  代币数量 = 1.001 * 100
+        二.预览信息给用户，需要 付出多少(代币/法币) 能得到多少(代币/法币)
+        三.获取广告发布者(result.issuer) 广告发布者不能是购买者 不能买自己发布的广告提示用户
+            let result = await otc.fundAdvert("合约生成广告ID")
+        四.获取广告交易代币剩余量 最大交易量 最小交易量(result.surplus,result.min,result.max) 购买量大于剩余量提示用户 最小交易量 <= 购买量 <= 最大交易量
+            let result = await otc.fundAdvert("合约生成广告ID")
+        
+        五.检查是否还有未完成订单 返回为true 存在未完成订单,提示用户 返回为false 继续下一步
+            let result = await otc.lockPay("用户钱包地址")
+        六.需先授权代币
+            let result = await otc.approve({
+                token:"代币合约地址", 
+                amount:代币数量
+            })
+        七.提交发布项目的交易hash给后台解析 后台提供接口
+            let result = await otc.payment({
+                aid:"合约生成广告ID", 
+                amount:代币数量,
+                desc:"交易条款",
+                payType:"支付方式"
+            })
+        八.交易示例:https://testnet.bscscan.com/tx/0x5ab6831534fb89c4c0ee53c8e76211c3881c3e1febf93b8931b36b6633b89e91#eventlog
+        九.解析事件:Payment (bytes32 aid, address sender, address token, uint256 amount, string payType, string desc)
+        十.Topics[0]:0x40cf68cfa14a887899601413ad998cdd123d50f767907af1818e4db747060c96
+
+4.U商撤销广告
+    a.卖单撤单
+        一.请求接口获取撤销当前广告的信息 (返还金额，签名类型，授权签名，合约生成的广告ID,手续费金额),后台需检查该广告下所有订单是否存在未完成的...  后台提供接口
+        二.预览相关的信息
+        三.检查授权签名是否重复输入 返回为true 存在重复输入,提示用户 返回为false 继续下一步
+            let result = await otc.expired("授权签名")
+        四.调用合约提交撤单,返还代币 (测试 返还金额以及手续费金额可定义，可先对接，接口完成后接入真实数据)
+            let result = await otc.complete({
+                aid:"合约生成广告ID", 
+                signType: 3:下架广告,
+                amount:返还金额,
+                fee:手续费金额,
+                signature:"授权签名 当前测试可以不传,会自动进行签名"
+            })
+        五.提交广告撤单hash给后台,后台解析下架广告 后台提供接口
+        六.交易示例:https://testnet.bscscan.com/tx/0x3beb603f2c54a0ba1deb9fec6d76137ccbd4831e45d5355cc0b0889611f74cff
+        七.Revoke (bytes32 aid, address recipient, address token, uint256 amount, uint256 feeAmount, bytes signature)
+        八.Topics[0]:0xc86911cb03a0d5a61c21cc171991bdf7e04966439d6103d5654e550a0cc511fc
+        九.注意:用户撤销订单/U商撤销广告事件一样，根据签名判断签名类型 来确定是U商撤销广告还是用户撤销订单,需要建签名表(主链ID,接收者,接收金额(大数),手续费金额(大数),签名类型,代币合约地址....)
+
+    b.买单撤单
+        一.请求接口提交撤单数据给后台 后台提供接口
+        二.后台检查所有订单是否存在未完成的 下架广告
+
+5.用户撤销订单
+    a.我要买 撤单
+        一.请求接口提交撤单数据给后台 后台提供接口
+        二.后台取消订单
+    b.我要卖 撤单
+        一.请求接口获取撤销当前订单的信息 (返还金额，签名类型，授权签名，合约生成的广告ID,手续费金额),后台需检查当前订单所属用户以及相关金额...  后台提供接口
+        二.预览相关的信息
+        三.检查授权签名是否重复输入 返回为true 存在重复输入,提示用户 返回为false 继续下一步
+            let result = await otc.expired("授权签名")
+        四.调用合约提交撤单,返还代币 (测试 返还金额以及手续费金额可定义，可先对接，接口完成后接入真实数据)
+            let result = await otc.complete({
+                aid:"合约生成广告ID", 
+                signType: 2:撤销订单,
+                amount:返还金额,
+                fee:手续费金额,
+                signature:"授权签名 当前测试可以不传,会自动进行签名"
+            })
+        五.提交订单撤单hash给后台,后台解析撤销订单 后台提供接口
+        六.交易示例:https://testnet.bscscan.com/tx/0x8b2026c66682de51b4611ed3329563a48223b4833d50dbcea6bf95c0ee2b26c7
+        七.Revoke (bytes32 aid, address recipient, address token, uint256 amount, uint256 feeAmount, bytes signature)
+        八.Topics[0]:0xc86911cb03a0d5a61c21cc171991bdf7e04966439d6103d5654e550a0cc511fc
+        九.注意:用户撤销订单/U商撤销广告事件一样，根据签名判断签名类型 来确定是U商撤销广告还是用户撤销订单,需要建签名表(主链ID,接收者,接收金额(大数),手续费金额(大数),签名类型,代币合约地址....)
+
+6.完成订单
+    a.我要买 完成订单
+        一.用户确认完法币付款并且U商确认收款
+        二.用户请求后台接口获取当前订单的信息 (代币金额，签名类型，授权签名，合约生成的广告ID,手续费金额),后台需检查当前订单所属用户以及相关金额...  后台提供接口
+        三.检查授权签名是否重复输入 返回为true 存在重复输入,提示用户 返回为false 继续下一步
+            let result = await otc.expired("授权签名")
+        四.调用合约完成订单,获得代币 (测试 代币金额以及手续费金额可定义，可先对接，接口完成后接入真实数据)
+            let result = await otc.complete({
+                aid:"合约生成广告ID", 
+                signType: 1:完成订单,
+                amount:代币金额,
+                fee:手续费金额,
+                sender:代币支付者地址,
+                signature:"授权签名 当前测试可以不传,会自动进行签名"
+            })
+        五.提交完成订单hash给后台,后台解析完成订单 后台提供接口
+        六.交易示例:https://testnet.bscscan.com/tx/0x7c482b20c15cbe4b925d3b2c642baf56263774cbbb90a3872641334efbe1a1cf
+        七.Complete (bytes32 aid, address recipient, address token, uint256 amount, uint256 feeAmount, uint256 surplus, bytes signature)
+        八.Topics[0]:0xdf4713495fe1038225318492d413cb179294aecb9c3cc2546c943c91ae5bc948
+    b.我要卖 完成订单
+        一.U商确认完法币付款并且用户确认收款
+        二.U商请求后台接口获取当前订单的信息 (代币金额，签名类型，授权签名，合约生成的广告ID,手续费金额),后台需检查当前订单所属用户以及相关金额...  后台提供接口
+        三.检查授权签名是否重复输入
+            let result = await otc.expired("授权签名")
+        四.调用合约完成订单,获得代币 (测试 代币金额以及手续费金额可定义，可先对接，接口完成后接入真实数据)
+            let result = await otc.complete({
+                aid:"合约生成广告ID", 
+                signType: 1:完成订单,
+                amount:代币金额,
+                fee:手续费金额,
+                sender:代币支付者地址,
+                signature:"授权签名 当前测试可以不传,会自动进行签名"
+            })
+        五.提交完成订单hash给后台,后台解析完成订单 后台提供接口
+        六.交易示例:https://testnet.bscscan.com/tx/0x7c482b20c15cbe4b925d3b2c642baf56263774cbbb90a3872641334efbe1a1cf
+        七.Complete (bytes32 aid, address recipient, address token, uint256 amount, uint256 feeAmount, uint256 surplus, bytes signature)
+        八.Topics[0]:0xdf4713495fe1038225318492d413cb179294aecb9c3cc2546c943c91ae5bc948
+
+7.保证金撤回
+    a.前端提交撤回金额给后台 限制撤回金额小于等于 保证金剩余量
+    b.后台生成记录，在后台管理系统可见用于管理退还保证金
+    c.前端需要提供撤单记录 以及 缴纳保证金记录  后台提供接口
+    d.交易示例:https://testnet.bscscan.com/tx/0xa8b6055967a1465090face639b7ddb7c7be5c26d1b736a7570b834e2038b4841
+    e.BackMargin (address recipient, address token, uint256 amount, uint256 total, uint256 surplus)
+    f.Topics[0]:0x59c54c8406ceca05a4fb26d79a5cf4838cb7bd58200e8baf9fe1db5b494edaeb
+
+8.币种手续费
+    a.每一个代币 全局可设置(买家/卖家)币种手续费(固定手续费/百分比手续费) 
+        例如:买单手续费 1% 卖单手续费 2%
+    b.每一个代币 对应每个U商等级 都需要可以设置(买家/卖家)手续费(固定手续费/百分比手续费)
+            U商A: V1 
+                USDT 买单手续费 1% 卖单手续费 2%
+                BTC  买单手续费 1.2% 卖单手续费 2.3%
+            U商B: V2  
+                USDT 买单手续费 0.5% 卖单手续费 1%
+                BTC 买单手续费 0.6% 卖单手续费 1.2%
+            U商C: V3  
+                USDT 买单手续费 1USDT 卖单手续费 1USDT
+                BTC 买单手续费 1.2USDT 卖单手续费 1.4USDT
+
+9.签名规则
+    a.签名类型:U商撤销广告:3 / 用户撤销订单:2 / 完成订单:1
+    b.参数排序:
+        一.主链真实ID chainId
+        二.合约生成的广告ID
+        三.签名类型
+        四.接收者钱包地址
+        五.代币支付钱包地址
+        六.代币合约地址
+        七.接收代币的金额 真实数据 大数
+        八.交易扣除的手续费金额 真实数据 大数(包含买卖双方的手续费金额)
+        九.签名时间
+    c.建签名表(主链ID,合约生成的广告ID,接收者,接收金额(大数),手续费金额(大数),签名类型,代币合约地址,签名时间....)    
+
+10.异常订单判定
+    a.买卖双方都未确定,半小时后订单自动失效
+    b.买单广告 U商确定付款 用户未确定收款 该笔USDT会被滞留在智能合约上72小时，由客服确认责任方，判定该笔USDT的获得方并邮件通知。
+    c.买单广告 U商未确定付款 用户确定收款 该笔USDT会被滞留在智能合约上72小时，由客服确认责任方，判定该笔USDT的获得方并邮件通知 (或自动完成订单)。
+    d.卖单广告 U商确定收款 用户未确定付款 该笔USDT会被滞留在智能合约上72小时，由客服确认责任方，判定该笔USDT的获得方并邮件通知 (或自动完成订单)。
+    e.卖单广告 U商未确定收款 用户确定付款 该笔USDT会被滞留在智能合约上72小时，由客服确认责任方，判定该笔USDT的获得方并邮件通知。
+    
+    
+11.U商评级考核
+
+
+
+
+以下接口 前端接口需签名登录且请求头添加 当前钱包的主链标识
+
+1.前端 提交撤回保证金申请 参数:（代币合约地址,撤回金额）
+2.前端 提交撤回申请保证金的记录 返回字段:（提交时间，代币信息，金额，交易hash,状态[审核中，审核通过，审核拒绝，待发放，已发放，发放成功，发放失败],拒绝原因）
+3.前端 保证金缴纳记录 返回字段:（缴纳时间，代币信息，金额，交易hash）
+4.后台 撤回申请保证金的记录审核 参数:（id,status,拒绝原因）
+5.后台 保证金审核通过的发放记录 并对撤回保证金事件进行监听(BackMargin)
+6.前端 币种详情返回当前用户的 币种余额 买单手续费 以及 卖单手续费
+7.前端 发布广告提交hash解析交易接口 参数:(hash,type)
+8.前端 买单广告支付功能提交hash解析交易接口 参数:(hash,type)
+9.前端 放币签名接口 参数:(签名类型[U商撤销广告:3 / 用户撤销订单:2 / 完成订单:1],订单ID) 返回数据：(返还金额，签名类型，授权签名，合约生成的广告ID,手续费金额...)
+10.前端 U商撤销广告功能提交hash解析交易接口 参数:(hash,type)
+11.前端 用户撤销订单功能提交hash解析交易接口 参数:(hash,type)
+12.前端 完成订单功能提交hash解析交易接口 参数:(hash,type)
+13.后台 设置用户交易手续费 参数：(用户钱包地址，币种ID, 买单手续费，买单手续费类型，卖单手续费，卖单手续费类型)
+
+
+
+
+
+
+

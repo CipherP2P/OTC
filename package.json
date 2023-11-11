@@ -1,0 +1,12 @@
+{
+    "scripts": {
+        "deploy:localhost": "node run.js localhost",
+        "deploy:bscTestnet": "node run.js bscTestnet"
+    },
+    "dependencies": {
+        "chalk": "^4.1.2",
+        "child_process": "^1.0.2",
+        "commander": "^11.0.0"
+    }
+    
+}

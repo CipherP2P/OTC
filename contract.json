@@ -1,0 +1,9 @@
+{
+    "localhost": {
+        "OTC": "0x9eb3F97ddaddCf72Df56E8dd6e5615Dc1C110F03"
+    },
+    "bscTestnet": {
+        "OTC": "0x8FCeb4a9C84DAB5090aDba559C52714237c4Fa9F",
+        "Margin": "0x4F0Ef1B0563D726Eea4c983771154Ec5807Bc38B"
+    }
+}
